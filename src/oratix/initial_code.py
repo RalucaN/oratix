@@ -1,5 +1,3 @@
-
-
 # Importing libraries
 
 from bs4 import BeautifulSoup
@@ -11,14 +9,11 @@ import time
 import os
 
 # User Inputs
-
 topic='machine learning' # Select a topic from the list available here: https://www.ted.com/topics
-
 filename=f"slug/TED_Talk_{topic}_URLs.txt"
 
 
 # Version 1 - using api request
-
 def api_scraping(topic, filename):
     urls = []
     page_number=0
@@ -76,9 +71,7 @@ def api_scraping(topic, filename):
               }
           }]
 
-
-
-        # Send the POST request and get the response
+        # Get SLUGS from search API by topic tag with pagination
         response = requests.post(endpoint, headers=headers, data=json.dumps(data))
         if page_number==0:
             total_pages=response.json()['results'][0]['nbPages']
@@ -95,20 +88,15 @@ def api_scraping(topic, filename):
     print(f"Done.{len(urls)} URLs for topic {topic} have been saved in {f}.")
     return
 
-
-
 api_scraping(topic,filename)
 
-
 # function to get id
-
 def getBuildID():
     response=requests.get("https://ted.com")
     buildID=str(response.content).split("buildId\":\"")[1].split("\"")[0]
     return buildID
 
 # function to build url
-
 def buildDataURL(slug):
     daily_id=getBuildID()
     base=f"https://www.ted.com/_next/data/{daily_id}/talks/"
@@ -117,7 +105,6 @@ def buildDataURL(slug):
     return url
 
 # function to get slug data
-
 def getSlugData(url):
     response=requests.get(url)
     try:
@@ -128,7 +115,6 @@ def getSlugData(url):
         issues[url]=response
 
 # function to export json data for a list of slugs
-
 def extract_json_by_slug(path_to_json,slugs, retry_limit=3):
     count=0
     max_count=10
@@ -176,7 +162,6 @@ def extract_json_by_slug(path_to_json,slugs, retry_limit=3):
         print(issues)
     return slugs_to_retry,issues
 
-
 # Data quality check: function to check for null jsons and missing transcripts
 missing=[]
 nulls=[]
@@ -218,8 +203,4 @@ slugs = list(set([item for sublist in slugs_combined for item in sublist]))
 
 issues={}
 extract_json_by_slug(path_to_json,slugs)
-
-
-
 check_null_missing_transcript(path_to_json)
-
