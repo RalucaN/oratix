@@ -1,13 +1,78 @@
+#//////////////////////////////////////////////////////////////////////////////
+#------------------------------------------------------------------------------
+#                                                                             #
+#             ____  _____         _______ _______   __                        #
+#            / __ \|  __ \     /\|__   __|_   _\ \ / /                        #
+#           | |  | | |__) |   /  \  | |    | |  \ V /                         #
+#           | |  | |  _  /   / /\ \ | |    | |   > <                          #
+#           | |__| | | \ \  / ____ \| |   _| |_ / . \                         #
+#            \____/|_|  \_\/_/    \_\_|  |_____/_/ \_\                        #
+#                                                                             #
+#------------------------------------------------------------------------------
+#\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 # Importing libraries
 import requests
 import json
 import time
 import os
 
-# User Inputs
+# =============================================================================
+# | Config
+# =============================================================================
+
 topic = 'machine learning'
 filename = f"slug/TED_Talk_{topic}_URLs.txt"
+host = "https://ted.com"
+path_to_json = 'jsons/'
+path_to_slug = 'slug/'
 
+issues = {}
+missing = []
+nulls = []
+slugs_combined = []
+
+
+# =============================================================================
+# | Helper methods
+# =============================================================================
+
+# function to get id
+def getBuildID():
+    response = requests.get(host)
+    buildID = str(response.content).split("buildId\":\"")[1].split("\"")[0]
+    return buildID
+
+
+def getTopics(url):
+    sourceCode = str(requests.get(url).content).replace("\\", "")
+    jsonData = sourceCode.split('type="application/json">')[1].split('</script>')[0]
+    topicSlugs = []
+    listElements = json.loads(jsonData)["props"]["pageProps"]["list"]
+    for elem in listElements:
+        itemsList = elem["items"]
+        for item in itemsList:
+            topicSlugs.append(item["slug"])
+    return topicSlugs
+
+
+# function to build url
+def buildDataURL(slug):
+    daily_id = getBuildID()
+    base = f"{host}/_next/data/{daily_id}/talks/"
+    mid = ".json?slug="
+    url = base+slug+mid+slug
+    return url
+
+
+# function to get slug data
+def getSlugData(url):
+    response = requests.get(url)
+    try:
+        return response.json()
+    except ValueError:
+        print(url)
+        print(response)
+        issues[url]=response
 
 # Version 1 - using api request
 def api_scraping(topic, filename):
@@ -28,7 +93,7 @@ def api_scraping(topic, filename):
 
         # The data for the request
         data = [{
-              "indexName": "coyote_models_acme_videos_alias_21e1372f285984be956cd03b7ad3406e",
+              "indexName": "coyote_models_acme_videos_alias_21e1372f285984be956cd03b7ad3406e",  # TODO: THIS MIGHT NEED RETRIEVING DYNAMICALLY
               "params": {
                   "attributeForDistinct": "objectID",
                   "distinct": 1,
@@ -51,7 +116,7 @@ def api_scraping(topic, filename):
               }
           },
           {
-              "indexName": "coyote_models_acme_videos_alias_21e1372f285984be956cd03b7ad3406e",
+              "indexName": "coyote_models_acme_videos_alias_21e1372f285984be956cd03b7ad3406e",  # TODO: THIS MIGHT NEED RETRIEVING DYNAMICALLY
               "params": {
                   "analytics": False,
                   "attributeForDistinct": "objectID",
@@ -85,49 +150,16 @@ def api_scraping(topic, filename):
     return
 
 
-api_scraping(topic, filename)
-
-
-# function to get id
-def getBuildID():
-    response = requests.get("https://ted.com")
-    buildID = str(response.content).split("buildId\":\"")[1].split("\"")[0]
-    return buildID
-
-
-def getTopics(url):
-    sourceCode = str(requests.get(url).content).replace("\\", "")
-    jsonData = sourceCode.split('type="application/json">')[1].split('</script>')[0]
-    topicSlugs = []
-    listElements = json.loads(jsonData)["props"]["pageProps"]["list"]
-    for elem in listElements:
-        itemsList = elem["items"]
-        for item in itemsList:
-            topicSlugs.append(item["slug"])
-    return topicSlugs
-
-
-topics = getTopics("https://ted.com/topics")
-
-
-# function to build url
-def buildDataURL(slug):
-    daily_id = getBuildID()
-    base = f"https://www.ted.com/_next/data/{daily_id}/talks/"
-    mid = ".json?slug="
-    url = base+slug+mid+slug
-    return url
-
-
-# function to get slug data
-def getSlugData(url):
-    response = requests.get(url)
-    try:
-        return response.json()
-    except ValueError:
-        print(url)
-        print(response)
-        issues[url]=response
+def discoverSlugDataFiles():
+    slug_files = [pos_slug for pos_slug in os.listdir(path_to_slug) if pos_slug.endswith('.txt')]
+    for sfile in slug_files:
+        print(sfile)
+        with open(os.path.join(path_to_slug, sfile)) as slug_file:
+            loaded = slug_file.read().splitlines()
+            print(f"{len(loaded)} slugs found")
+            slugs_combined.append(loaded)
+    # combining all slugs and removing duplicates
+    return list(set([item for sublist in slugs_combined for item in sublist]))
 
 
 # function to export json data for a list of slugs
@@ -181,10 +213,6 @@ def extract_json_by_slug(path_to_json, slugs, retry_limit=3):
 
 
 # Data quality check: function to check for null jsons and missing transcripts
-missing = []
-nulls = []
-
-
 def check_null_missing_transcript(path_to_json):
     count_missing = 0
     count_null = 0
@@ -204,23 +232,12 @@ def check_null_missing_transcript(path_to_json):
     print(f"There are {count_missing} jsons files with missing transcripts")
 
 
-# define which slugs to be loaded and where to save json files
-path_to_json = 'jsons/'
-path_to_slug = 'slug/'
-slug_files = [pos_slug for pos_slug in os.listdir(path_to_slug) if pos_slug.endswith('.txt')]
+# =============================================================================
+# | Execution
+# =============================================================================
 
-slugs_combined = []
-
-for sfile in slug_files:
-    print(sfile)
-    with open(os.path.join(path_to_slug, sfile)) as slug_file:
-        loaded = slug_file.read().splitlines()
-        print(f"{len(loaded)} slugs found")
-        slugs_combined.append(loaded)
-
-# combining all slugs and removing duplicates
-slugs = list(set([item for sublist in slugs_combined for item in sublist]))
-
-issues = {}
-extract_json_by_slug(path_to_json, slugs)
+api_scraping(topic, filename)
+extract_json_by_slug(path_to_json, discoverSlugDataFiles())
 check_null_missing_transcript(path_to_json)
+
+#------------------------------------------------------------------------------
